@@ -5,3 +5,5 @@ local M = {}
 function M.setup()
     print("Starting olive")
 end
+
+return M
