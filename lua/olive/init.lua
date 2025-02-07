@@ -88,11 +88,21 @@ local function traverse()
             end
 
             local path = root .. "/" .. name
+            local stat = vim.loop.fs_stat(path)
+
+            table.insert(files, {
+                name = name,
+                path = root,
+                type = type,
+                size = stat.size,
+                permissions = stat.mode % 512, -- remove filetype bits from the start
+                modified = stat.mtime.sec,
+                created = stat.birthtime.sec,
+            })
+
             if type == "directory" then
                 deque.pushright(queue, path)
             end
-
-            table.insert(files, { name = path, type = type })
         end
 
         root = deque.popleft(queue)
@@ -110,8 +120,11 @@ function M.open()
     local files = traverse()
 
     local file_strings = {}
-    for i, file in ipairs(files) do
-        table.insert(file_strings, string.format("%i: %s (%s)", i, file.name, file.type))
+    for _, file in ipairs(files) do
+        table.insert(file_strings,
+            string.format("%o\t%i\t%i\t%06i\t\t%s/%s\t%s", file.permissions, file.created, file.modified, file.size,
+                file
+                .path, file.name, file.type))
     end
 
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, file_strings)
