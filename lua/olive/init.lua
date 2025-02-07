@@ -120,6 +120,37 @@ local function traverse()
     return files
 end
 
+local function human_readable_size(bytes)
+    if not bytes then
+        return ""
+    end
+
+    if bytes < 1024 then
+        return bytes .. "B"
+    end
+    local units = { "B", "KB", "MB", "GB", "TB", "PB" }
+    local unit_index = 1
+    local size = bytes
+    while size >= 1024 and unit_index < #units do
+        size = size / 1024
+        unit_index = unit_index + 1
+    end
+    return string.format("%.2f%s", size, units[unit_index])
+end
+
+local function left_pad(text, size)
+    local len = #text
+    if len >= size then
+        return text
+    end
+
+    local remaining = size - len
+    local padding = string.rep(" ", remaining)
+
+    return padding .. text
+end
+
+
 function M.open()
     -- Initialize an olive buffer
 
@@ -169,12 +200,16 @@ function M.open()
             virt_text_win_col = 0,
         })
 
+        local time_format = "%H:%M"
+        local readable_modified = os.date(time_format, file.modified)
+        local readable_created = os.date(time_format, file.created)
+
         local meta_text = string.format(
-            "%o\t%i\t%i\t%06i",
+            "%-6o%-8s%-8s%-8s",
             file.permissions,
-            file.created,
-            file.modified,
-            file.size
+            readable_created,
+            readable_modified,
+            human_readable_size(file.size)
         )
 
         vim.api.nvim_buf_set_extmark(buf, ns, i - 1, 0, {
