@@ -1,5 +1,7 @@
 -- olive.lua - entry point to the plugin
 
+local deque = require("olive.utils.deque")
+
 local M = {}
 
 local function create_buffer()
@@ -70,12 +72,42 @@ local function list_files_in_cwd()
     return files
 end
 
+local function traverse()
+    local files = {}
+
+    local queue = deque.new()
+    deque.pushright(queue, ".")
+
+    local root = deque.popleft(queue)
+    while root do
+        local dir = vim.loop.fs_scandir(root)
+        while true do
+            local name, type = vim.loop.fs_scandir_next(dir)
+            if not name then
+                break
+            end
+
+            local path = root .. "/" .. name
+            if type == "directory" then
+                deque.pushright(queue, path)
+            end
+
+            table.insert(files, { name = path, type = type })
+        end
+
+        root = deque.popleft(queue)
+    end
+
+    return files
+end
+
 function M.open()
     -- Initialize an olive buffer
 
     local buf = create_buffer()
 
-    local files = list_files_in_cwd()
+    -- local files = list_files_in_cwd()
+    local files = traverse()
 
     local file_strings = {}
     for i, file in ipairs(files) do
