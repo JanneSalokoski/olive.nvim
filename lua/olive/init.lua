@@ -54,6 +54,12 @@ local function set_autocommands()
     })
 end
 
+local function set_hl_groups()
+    -- todo: set some reasonable color
+    vim.api.nvim_set_hl(0, "OlivePath", { fg = "#ff0000" })
+    vim.api.nvim_set_hl(0, "OliveMeta", { fg = "#00ff00" })
+end
+
 local function list_files_in_cwd()
     local cwd = vim.loop.cwd()
     local files = {}
@@ -125,21 +131,64 @@ function M.open()
         return a.full_path < b.full_path
     end)
 
-    local file_strings = {}
-    for _, file in ipairs(files) do
-        table.insert(file_strings,
-            string.format("%o\t%i\t%i\t%06i\t\t%s/%s\t%s", file.permissions, file.created, file.modified, file.size,
-                file
-                .path, file.name, file.type))
-    end
+    local ns = vim.api.nvim_create_namespace("olive")
 
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, file_strings)
+    local file_strings = {}
+    for i, file in ipairs(files) do
+        -- todo: We can have two different modes:
+        --          1) Tab indented mode
+        --          2) Virtual text path mode
+
+        table.insert(file_strings, file_string)
+
+        -- string.format(
+        --     "%o\t%i\t%i\t%06i\t\t%s/%s\t%s",
+        --     file.permissions,
+        --     file.created,
+        --     file.modified,
+        --     file.size,
+        --     file.path,
+        --     file.name,
+        --     file.type
+
+        local virt_text = string.format("%s", file.path .. "/")
+        local virt_text_len = #virt_text
+
+        -- This is only for the tab mode
+        -- local indent_level = select(2, string.gsub(file.path, "/", ""))
+        -- local tabs = string.rep("\t", indent_level)
+
+        local padding = string.rep(" ", virt_text_len)
+
+        local file_string = string.format("%s%s", padding, file.name)
+        vim.api.nvim_buf_set_lines(buf, i - 1, -1, false, { file_string })
+
+        vim.api.nvim_buf_set_extmark(buf, ns, i - 1, -1, {
+            virt_text = { { virt_text, "OlivePath" } },
+            virt_text_pos = "overlay",
+            virt_text_win_col = 0,
+        })
+
+        local meta_text = string.format(
+            "%o\t%i\t%i\t%06i",
+            file.permissions,
+            file.created,
+            file.modified,
+            file.size
+        )
+
+        vim.api.nvim_buf_set_extmark(buf, ns, i - 1, 0, {
+            virt_text = { { meta_text, "OliveMeta" } },
+            virt_text_pos = "right_align",
+        })
+    end
 end
 
 function M.setup()
     -- Setup olive
 
     set_autocommands()
+    set_hl_groups()
 end
 
 return M
