@@ -90,15 +90,18 @@ local function traverse()
             local path = root .. "/" .. name
             local stat = vim.loop.fs_stat(path)
 
-            table.insert(files, {
+            local entry = {
                 name = name,
                 path = root,
+                full_path = path,
                 type = type,
                 size = stat.size,
                 permissions = stat.mode % 512, -- remove filetype bits from the start
                 modified = stat.mtime.sec,
                 created = stat.birthtime.sec,
-            })
+            }
+
+            table.insert(files, entry)
 
             if type == "directory" then
                 deque.pushright(queue, path)
@@ -118,6 +121,9 @@ function M.open()
 
     -- local files = list_files_in_cwd()
     local files = traverse()
+    table.sort(files, function(a, b)
+        return a.full_path < b.full_path
+    end)
 
     local file_strings = {}
     for _, file in ipairs(files) do
