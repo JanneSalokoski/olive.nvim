@@ -1,6 +1,7 @@
 -- olive.lua - entry point to the plugin
 
-local deque = require("olive.utils.deque")
+local fs = require("olive.fs")
+local render = require("olive.render")
 
 local M = {}
 
@@ -60,162 +61,16 @@ local function set_hl_groups()
     vim.api.nvim_set_hl(0, "OliveMeta", { fg = "#00ff00" })
 end
 
-local function list_files_in_cwd()
-    local cwd = vim.loop.cwd()
-    local files = {}
-
-    local dir = vim.loop.fs_scandir(cwd)
-    if dir then
-        while true do
-            local name, type = vim.loop.fs_scandir_next(dir)
-            if not name then
-                break
-            end
-            table.insert(files, { name = name, type = type })
-        end
-    end
-
-    return files
-end
-
-local function traverse()
-    local files = {}
-
-    local queue = deque.new()
-    deque.pushright(queue, ".")
-
-    local root = deque.popleft(queue)
-    while root do
-        local dir = vim.loop.fs_scandir(root)
-        while true do
-            local name, type = vim.loop.fs_scandir_next(dir)
-            if not name then
-                break
-            end
-
-            local path = root .. "/" .. name
-            local stat = vim.loop.fs_stat(path)
-
-            local entry = {
-                name = name,
-                path = root,
-                full_path = path,
-                type = type,
-                size = stat.size,
-                permissions = stat.mode % 512, -- remove filetype bits from the start
-                modified = stat.mtime.sec,
-                created = stat.birthtime.sec,
-            }
-
-            table.insert(files, entry)
-
-            if type == "directory" then
-                deque.pushright(queue, path)
-            end
-        end
-
-        root = deque.popleft(queue)
-    end
-
-    return files
-end
-
-local function human_readable_size(bytes)
-    if not bytes then
-        return ""
-    end
-
-    if bytes < 1024 then
-        return bytes .. "B"
-    end
-    local units = { "B", "KB", "MB", "GB", "TB", "PB" }
-    local unit_index = 1
-    local size = bytes
-    while size >= 1024 and unit_index < #units do
-        size = size / 1024
-        unit_index = unit_index + 1
-    end
-    return string.format("%.2f%s", size, units[unit_index])
-end
-
-local function left_pad(text, size)
-    local len = #text
-    if len >= size then
-        return text
-    end
-
-    local remaining = size - len
-    local padding = string.rep(" ", remaining)
-
-    return padding .. text
-end
-
 
 function M.open()
     -- Initialize an olive buffer
 
     local buf = create_buffer()
-
-    -- local files = list_files_in_cwd()
-    local files = traverse()
-    table.sort(files, function(a, b)
-        return a.full_path < b.full_path
-    end)
-
+    local files = fs.get_files()
     local ns = vim.api.nvim_create_namespace("olive")
 
-    local file_strings = {}
     for i, file in ipairs(files) do
-        -- todo: We can have two different modes:
-        --          1) Tab indented mode
-        --          2) Virtual text path mode
-
-        table.insert(file_strings, file_string)
-
-        -- string.format(
-        --     "%o\t%i\t%i\t%06i\t\t%s/%s\t%s",
-        --     file.permissions,
-        --     file.created,
-        --     file.modified,
-        --     file.size,
-        --     file.path,
-        --     file.name,
-        --     file.type
-
-        local virt_text = string.format("%s", file.path .. "/")
-        local virt_text_len = #virt_text
-
-        -- This is only for the tab mode
-        -- local indent_level = select(2, string.gsub(file.path, "/", ""))
-        -- local tabs = string.rep("\t", indent_level)
-
-        local padding = string.rep(" ", virt_text_len)
-
-        local file_string = string.format("%s%s", padding, file.name)
-        vim.api.nvim_buf_set_lines(buf, i - 1, -1, false, { file_string })
-
-        vim.api.nvim_buf_set_extmark(buf, ns, i - 1, -1, {
-            virt_text = { { virt_text, "OlivePath" } },
-            virt_text_pos = "overlay",
-            virt_text_win_col = 0,
-        })
-
-        local time_format = "%H:%M"
-        local readable_modified = os.date(time_format, file.modified)
-        local readable_created = os.date(time_format, file.created)
-
-        local meta_text = string.format(
-            "%-6o%-8s%-8s%-8s",
-            file.permissions,
-            readable_created,
-            readable_modified,
-            human_readable_size(file.size)
-        )
-
-        vim.api.nvim_buf_set_extmark(buf, ns, i - 1, 0, {
-            virt_text = { { meta_text, "OliveMeta" } },
-            virt_text_pos = "right_align",
-        })
+        render.render_files(buf, files, ns)
     end
 end
 
